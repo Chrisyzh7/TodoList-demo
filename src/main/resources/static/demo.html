@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Todo List API 联调测试页面</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background-color: #f4f7f6; color: #333; }
+        h1, h2 { color: #007bff; border-bottom: 2px solid #ccc; padding-bottom: 5px; }
+        .container { max-width: 900px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .section { margin-bottom: 30px; padding: 15px; border: 1px solid #ddd; border-radius: 6px; }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input[type="text"], textarea { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px; font-size: 16px; }
+        button:hover { background-color: #0056b3; }
+        #results { margin-top: 20px; padding: 15px; background-color: #e9ecef; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word; font-size: 14px; }
+        .todo-item { border-bottom: 1px dashed #ccc; padding: 8px 0; display: flex; justify-content: space-between; align-items: center; }
+        .todo-actions button { margin-left: 5px; padding: 5px 10px; font-size: 12px; }
+        .completed { text-decoration: line-through; color: #6c757d; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>📝 Todo List API 联调测试</h1>
+    <p>当前后端基础URL: <code>http://localhost:8080/api/todos</code></p>
+
+    <div class="section">
+        <h2>创建待办事项 (POST)</h2>
+        <label for="title">标题 (Title):</label>
+        <input type="text" id="title" value="学习 Spring Boot Controller">
+        <label for="description">描述 (Description):</label>
+        <textarea id="description">深入理解@RestController和@RequestMapping的使用。</textarea>
+        <button onclick="createTodo()">创建 (POST)</button>
+        <button style="background-color: #dc3545;" onclick="createTodoEmptyTitle()">测试验证 (Title为空)</button>
+    </div>
+
+    <div class="section">
+        <h2>待办事项列表 (GET)</h2>
+        <button onclick="getAllTodos()">刷新列表 (GET)</button>
+        <div id="todo-list">
+            <p>点击上方按钮加载数据...</p>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>API 响应结果</h2>
+        <pre id="results"></pre>
+    </div>
+
+</div>
+
+<script>
+    const API_BASE_URL = 'http://localhost:8080/api/todos';
+    const resultsElement = document.getElementById('results');
+    const todoListElement = document.getElementById('todo-list');
+
+    /**
+     * 核心辅助函数：执行 Fetch 请求
+     */
+    async function executeFetch(url, method, body = null) {
+        try {
+            const options = {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+            };
+            if (body) {
+                options.body = JSON.stringify(body);
+            }
+
+            const response = await fetch(url, options);
+            const responseBody = await response.text();
+
+            // 格式化输出结果
+            resultsElement.innerHTML = `
+                Status: ${response.status} ${response.statusText}\n
+                URL: ${method} ${url}\n
+                Response Body:\n${response.status !== 204 && responseBody ? JSON.stringify(JSON.parse(responseBody), null, 2) : responseBody}
+            `;
+
+            return { success: response.ok, data: responseBody ? JSON.parse(responseBody) : null, status: response.status };
+        } catch (error) {
+            resultsElement.innerHTML = `Error: ${error.message}`;
+            return { success: false, data: null };
+        }
+    }
+
+    /**
+     * POST /api/todos
+     */
+    async function createTodo(title, description) {
+        const body = {
+            title: title || document.getElementById('title').value,
+            description: description || document.getElementById('description').value,
+            // completed 字段默认为 false, 在后端处理，此处无需发送
+        };
+
+        const result = await executeFetch(API_BASE_URL, 'POST', body);
+        if (result.success) {
+            getAllTodos(); // 创建成功后刷新列表
+        }
+    }
+
+    /**
+     * POST 测试验证：不带 Title
+     */
+    function createTodoEmptyTitle() {
+        createTodo('', '这是一个没有标题的任务');
+    }
+
+    /**
+     * GET /api/todos
+     */
+    async function getAllTodos() {
+        const result = await executeFetch(API_BASE_URL, 'GET');
+
+        if (result.success && Array.isArray(result.data)) {
+            renderTodoList(result.data);
+        } else {
+            todoListElement.innerHTML = '<p style="color:red;">加载列表失败。</p>';
+        }
+    }
+
+    /**
+     * PATCH /api/todos/{id}
+     */
+    async function toggleTodoStatus(id, currentStatus) {
+        const result = await executeFetch(`${API_BASE_URL}/${id}`, 'PATCH', {
+            completed: !currentStatus
+        });
+        if (result.success) {
+            getAllTodos(); // 更新成功后刷新列表
+        }
+    }
+
+    /**
+     * DELETE /api/todos/{id}
+     */
+    async function deleteTodo(id) {
+        if (!confirm(`确定要删除 ID: ${id} 的待办事项吗？`)) {
+            return;
+        }
+        const result = await executeFetch(`${API_BASE_URL}/${id}`, 'DELETE');
+        if (result.status === 204) {
+            resultsElement.innerHTML = `Status: 204 No Content\nURL: DELETE ${API_BASE_URL}/${id}\nMessage: 删除成功`;
+            getAllTodos(); // 删除成功后刷新列表
+        } else if (result.success) {
+            getAllTodos(); // 成功（状态码200）后刷新列表
+        }
+    }
+
+    /**
+     * 渲染待办事项列表
+     */
+    function renderTodoList(todos) {
+        if (todos.length === 0) {
+            todoListElement.innerHTML = '<p>当前没有待办事项。</p>';
+            return;
+        }
+
+        todoListElement.innerHTML = todos.map(todo => `
+            <div class="todo-item ${todo.completed ? 'completed' : ''}">
+                <div>
+                    <strong>ID ${todo.id}: ${todo.title}</strong>
+                    <br>
+                    <small>${todo.description} (${todo.completed ? '已完成' : '未完成'})</small>
+                </div>
+                <div class="todo-actions">
+                    <button onclick="toggleTodoStatus(${todo.id}, ${todo.completed})">
+                        ${todo.completed ? '标记为未完成' : '标记为已完成'}
+                    </button>
+                    <button style="background-color: #dc3545;" onclick="deleteTodo(${todo.id})">
+                        删除
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+</script>
+</body>
+</html>
