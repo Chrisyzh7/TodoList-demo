@@ -13,6 +13,7 @@ public class TodoResponse {
     private Boolean completed;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Priority priority;
 
     public TodoResponse(Todo todo) {
         this.id = todo.getId();
@@ -21,5 +22,6 @@ public class TodoResponse {
         this.completed = todo.getCompleted();
         this.createdAt = todo.getCreatedAt();
         this.updatedAt = todo.getUpdatedAt();
+        this.priority = todo.getPriority();
     }
 }

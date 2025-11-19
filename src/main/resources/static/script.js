@@ -1,59 +1,58 @@
+// --- 0. 全局变量和 API 地址 ---
 const API_BASE_URL = 'http://localhost:8080/api/todos';
+let currentTodos = [];
+
+// --- 1. DOM 元素获取 ---
 const todoListElement = document.getElementById('todoList');
-const addTodoForm = document.getElementById('addTodoForm');
-const searchButton = document.getElementById('searchButton');
-const resetButton = document.getElementById('resetButton');
 const searchInput = document.getElementById('searchInput');
 const completedFilter = document.getElementById('completedFilter');
+const sortBySelect = document.getElementById('sortBySelect');
+const showAddTaskModalBtn = document.getElementById('showAddTaskModalBtn');
+const loadingIndicator = document.getElementById('loadingIndicator');
 
-// --- 1. 初始化和事件绑定 ---
+// Modal Elements
+const taskModal = document.getElementById('taskModal');
+const closeModalBtn = taskModal.querySelector('.close-button');
+const taskForm = document.getElementById('taskForm');
+const modalTitle = document.getElementById('modalTitle');
+const modalTodoId = document.getElementById('modalTodoId');
+const modalTitleInput = document.getElementById('modalTitleInput');
+const modalDescriptionInput = document.getElementById('modalDescriptionInput');
+const modalPrioritySelect = document.getElementById('modalPrioritySelect');
 
+// --- 2. 初始化和事件绑定 ---
 document.addEventListener('DOMContentLoaded', () => {
     loadTodos();
 
-    // 监听新增任务表单提交
-    addTodoForm.addEventListener('submit', createTodo);
+    showAddTaskModalBtn.addEventListener('click', () => openModal());
+    searchInput.addEventListener('input', loadTodos);
+    completedFilter.addEventListener('change', loadTodos);
+    sortBySelect.addEventListener('change', loadTodos);
 
-    // 监听搜索按钮点击
-    searchButton.addEventListener('click', loadTodos);
+    taskForm.addEventListener('submit', handleModalSubmit);
+    closeModalBtn.addEventListener('click', closeModal);
+    taskModal.addEventListener('click', (e) => {
+        if (e.target === taskModal) closeModal();
+    });
 
-    // 监听重置按钮点击
-    resetButton.addEventListener('click', resetAndLoadTodos);
-
-    // 监听任务列表的点击事件 (使用事件委托)
     todoListElement.addEventListener('click', handleListActions);
 });
 
-// --- 2. 核心 Fetch 函数 ---
-
-/**
- * 封装 Fetch API，处理 JSON 数据
- */
+// --- 3. 核心 Fetch 函数 ---
 async function executeFetch(url, method, body = null) {
     try {
         const options = {
             method: method,
             headers: { 'Content-Type': 'application/json' },
         };
-        if (body) {
-            options.body = JSON.stringify(body);
-        }
-
+        if (body) options.body = JSON.stringify(body);
         const response = await fetch(url, options);
-
-        // 专门处理 204 No Content，它没有响应体
-        if (response.status === 204) {
-            return { success: true, data: null, status: 204 };
-        }
-
+        if (response.status === 204) return { success: true, data: null, status: 204 };
         if (!response.ok) {
-            // 抛出包含状态码和错误信息的错误
             const errorBody = await response.json().catch(() => ({ message: response.statusText }));
             throw new Error(`HTTP Error ${response.status}: ${errorBody.message || 'Server Error'}`);
         }
-
         return { success: true, data: await response.json(), status: response.status };
-
     } catch (error) {
         console.error('API Error:', error);
         alert(`操作失败: ${error.message}`);
@@ -61,145 +60,144 @@ async function executeFetch(url, method, body = null) {
     }
 }
 
-// --- 3. CRUD 方法实现 ---
-
-/**
- * [GET] /api/todos - 加载并显示所有待办事项，支持搜索和筛选
- */
-async function loadTodos() {
-    // 构造查询参数
-    const search = searchInput.value.trim();
-    const completed = completedFilter.value; // 'true', 'false', 或 ''
-
-    let url = API_BASE_URL;
-    const params = new URLSearchParams();
-
-    if (search) {
-        params.append('search', search);
-    }
-    if (completed !== '') {
-        params.append('completed', completed);
-    }
-
-    if (params.toString()) {
-        url += '?' + params.toString();
-    }
-
-    const result = await executeFetch(url, 'GET');
-
-    if (result.success && Array.isArray(result.data)) {
-        renderTodoList(result.data);
+// --- 4. 弹窗 (Modal) 管理 - 关键修复 ---
+function openModal(todo = null) {
+    if (todo) {
+        modalTitle.textContent = '编辑任务';
+        modalTodoId.value = todo.id;
+        modalTitleInput.value = todo.title;
+        modalDescriptionInput.value = todo.description;
+        modalPrioritySelect.value = todo.priority;
     } else {
-        todoListElement.innerHTML = '<li style="color:red; text-align:center;">无法加载任务列表。</li>';
+        modalTitle.textContent = '新增任务';
+        taskForm.reset();
+        modalTodoId.value = '';
+        modalPrioritySelect.value = 'MEDIUM';
+    }
+    taskModal.classList.add('visible');
+}
+
+function closeModal() {
+    taskModal.classList.remove('visible');
+}
+
+// --- 5. CRUD 和核心逻辑 ---
+async function loadTodos() {
+    loadingIndicator.style.display = 'flex';
+    try {
+        const search = searchInput.value.trim();
+        const completed = completedFilter.value;
+        const sortBy = sortBySelect.value;
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+        if (completed !== '') params.append('completed', completed);
+        if (sortBy) params.append('sortBy', sortBy);
+        const url = `${API_BASE_URL}?${params.toString()}`;
+        const result = await executeFetch(url, 'GET');
+        if (result.success && Array.isArray(result.data)) {
+            currentTodos = result.data;
+            renderTodoList(currentTodos);
+        } else {
+            todoListElement.innerHTML = '<div class="empty-state">糟糕！无法加载任务列表。</div>';
+        }
+    } finally {
+        loadingIndicator.style.display = 'none';
     }
 }
 
-/**
- * [POST] /api/todos - 创建新的待办事项
- */
-async function createTodo(e) {
-    e.preventDefault(); // 阻止表单默认提交行为
-
-    const title = document.getElementById('newTitle').value.trim();
-    const description = document.getElementById('newDescription').value.trim();
-
-    if (!title) {
+async function handleModalSubmit(e) {
+    e.preventDefault();
+    const id = modalTodoId.value;
+    const body = {
+        title: modalTitleInput.value.trim(),
+        description: modalDescriptionInput.value.trim(),
+        priority: modalPrioritySelect.value,
+    };
+    if (!body.title) {
         alert('任务标题不能为空！');
         return;
     }
-
-    const body = { title, description };
-    const result = await executeFetch(API_BASE_URL, 'POST', body);
-
+    const method = id ? 'PUT' : 'POST';
+    const url = id ? `${API_BASE_URL}/${id}` : API_BASE_URL;
+    const result = await executeFetch(url, method, body);
     if (result.success) {
-        addTodoForm.reset(); // 清空表单
-        loadTodos(); // 刷新列表
+        closeModal();
+        loadTodos();
     }
 }
 
-/**
- * [DELETE] /api/todos/{id} - 删除待办事项
- */
 async function deleteTodo(id) {
-    if (!confirm(`确定要删除 ID: ${id} 的待办事项吗？`)) {
-        return;
-    }
+    if (!confirm(`确定要删除此任务吗？`)) return;
     const result = await executeFetch(`${API_BASE_URL}/${id}`, 'DELETE');
-
-    if (result.success) {
-        loadTodos(); // 删除成功后刷新列表
-    }
+    if (result.success) loadTodos();
 }
 
-/**
- * [PATCH] /api/todos/{id} - 切换完成状态
- */
 async function toggleTodoStatus(id, isCompleted) {
-    const result = await executeFetch(`${API_BASE_URL}/${id}`, 'PATCH', {
-        completed: !isCompleted // 切换状态
-    });
+    const result = await executeFetch(`${API_BASE_URL}/${id}`, 'PATCH', { completed: isCompleted });
+    if (result.success) loadTodos();
+}
 
-    if (result.success) {
-        loadTodos(); // 更新成功后刷新列表
+// --- 6. DOM 渲染和辅助函数 ---
+function getPriorityEmoji(priority) {
+    switch (priority) {
+        case 'HIGH': return '🔥';
+        case 'MEDIUM': return '🟡';
+        case 'LOW': return '❄️';
+        default: return '';
     }
 }
 
-/**
- * 重置搜索和筛选条件
- */
-function resetAndLoadTodos() {
-    searchInput.value = '';
-    completedFilter.value = '';
-    loadTodos();
+function formatRelativeTime(date) {
+    const now = new Date();
+    const diffInSeconds = Math.floor((now - date) / 1000);
+    const minutes = Math.floor(diffInSeconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    if (diffInSeconds < 60) return '刚刚';
+    if (minutes < 60) return `${minutes} 分钟前`;
+    if (hours < 24) return `${hours} 小时前`;
+    if (days === 1) return '昨天';
+    if (days < 7) return `${days} 天前`;
+    return date.toLocaleDateString('zh-CN');
 }
 
-// --- 4. DOM 操作和事件委托 ---
-
-/**
- * 渲染待办事项列表
- */
 function renderTodoList(todos) {
-    todoListElement.innerHTML = ''; // 清空列表
-
+    todoListElement.innerHTML = '';
     if (todos.length === 0) {
-        todoListElement.innerHTML = '<p style="text-align:center; color: var(--secondary-color);">没有找到匹配的任务。</p>';
+        const hasFilters = searchInput.value || completedFilter.value !== '';
+        const message = hasFilters
+            ? '没有找到匹配的任务，请尝试更换筛选条件。'
+            : '太棒了，所有任务都已完成！或者... 你可以 <a href="#" id="emptyStateAddLink">添加一个新任务</a>。';
+        todoListElement.innerHTML = `<div class="empty-state">${message}</div>`;
+        const emptyLink = document.getElementById('emptyStateAddLink');
+        if (emptyLink) {
+            emptyLink.onclick = (e) => {
+                e.preventDefault();
+                openModal();
+            };
+        }
         return;
     }
-
     todos.forEach(todo => {
-        // --- 格式化时间 ---
-        // 确保后端返回的时间戳 (或ISO字符串) 是有效的
         const createdDate = new Date(todo.createdAt);
         const updatedDate = new Date(todo.updatedAt);
-
-        const timeOptions = {
-            year: 'numeric', month: '2-digit', day: '2-digit',
-            hour: '2-digit', minute: '2-digit', second: '2-digit' // 添加秒级显示
-        };
-
-        // 使用 toLocaleString 进行本地化格式化 (例如: "2025/11/19 15:00:00")
-        const createdAt = createdDate.toLocaleString('zh-CN', timeOptions);
-        const updatedAt = updatedDate.toLocaleString('zh-CN', timeOptions);
-        // ------------------
-
+        const updatedRelative = formatRelativeTime(updatedDate);
         const item = document.createElement('li');
         item.className = `todo-item ${todo.completed ? 'completed' : ''}`;
-        item.dataset.id = todo.id; // 存储 ID
-
+        item.dataset.id = todo.id;
         item.innerHTML = `
-            <input type="checkbox" class="toggle-checkbox" ${todo.completed ? 'checked' : ''} data-id="${todo.id}">
-            
+            <input type="checkbox" class="toggle-checkbox" data-action="toggle" data-id="${todo.id}" ${todo.completed ? 'checked' : ''}>
+            <span class="priority-indicator" title="优先级: ${todo.priority}">${getPriorityEmoji(todo.priority)}</span>
             <div class="todo-item-content">
                 <div class="todo-item-title">${todo.title}</div>
-                <div class="todo-item-description">${todo.description || '无描述'}</div>
-                
+                ${todo.description ? `<div class="todo-item-description">${todo.description}</div>` : ''}
                 <div class="todo-times">
-                    <span class="todo-created-at">创建于: ${createdAt}</span>
-                    <span class="todo-updated-at">修改于: ${updatedAt}</span>
+                    <span>创建于: ${createdDate.toLocaleString('zh-CN')}</span>
+                    <span>修改于: ${updatedRelative}</span>
                 </div>
             </div>
-            
             <div class="todo-actions">
+                <button class="edit-btn" data-action="edit" data-id="${todo.id}">编辑</button>
                 <button class="delete-btn" data-action="delete" data-id="${todo.id}">删除</button>
             </div>
         `;
@@ -207,25 +205,21 @@ function renderTodoList(todos) {
     });
 }
 
-/**
- * 使用事件委托处理列表项上的所有点击事件
- */
 function handleListActions(e) {
     const target = e.target;
+    const action = target.dataset.action;
     const id = target.dataset.id;
-
-    if (!id) return;
-
-    // 监听删除按钮
-    if (target.classList.contains('delete-btn') && target.dataset.action === 'delete') {
-        deleteTodo(id);
-        return;
-    }
-
-    // 监听复选框状态切换
-    if (target.classList.contains('toggle-checkbox')) {
-        // isCompleted 已经是切换后的新状态，但我们 PATCH 需要的是切换前状态的反向
-        const isCompleted = target.checked;
-        toggleTodoStatus(id, !isCompleted); // 传入 !isCompleted，让后端将状态切换为 isCompleted
+    if (!action || !id) return;
+    switch (action) {
+        case 'delete':
+            deleteTodo(id);
+            break;
+        case 'toggle':
+            toggleTodoStatus(id, target.checked);
+            break;
+        case 'edit':
+            const todoToEdit = currentTodos.find(t => t.id == id);
+            if (todoToEdit) openModal(todoToEdit);
+            break;
     }
 }

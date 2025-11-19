@@ -10,30 +10,62 @@
 <div class="container">
     <h1>待办事项清单 (Todo List)</h1>
 
-    <div class="search-section">
+    <!-- --- 控制区 --- -->
+    <div class="controls-section">
         <input type="text" id="searchInput" placeholder="按标题或描述搜索...">
         <select id="completedFilter">
-            <option value="">所有任务</option>
+            <option value="">所有状态</option>
             <option value="false">未完成</option>
             <option value="true">已完成</option>
         </select>
-        <button id="searchButton">搜索 / 筛选</button>
-        <button id="resetButton" style="background-color: #6c757d;">重置</button>
+        <select id="sortBySelect">
+            <option value="updatedAt">按更新时间排序</option>
+            <option value="createdAt">按创建时间排序</option>
+            <option value="priority">按优先级排序</option>
+        </select>
+        <button id="showAddTaskModalBtn">➕ 添加新任务</button>
     </div>
 
-    <div class="add-section">
-        <h2>新增任务</h2>
-        <form id="addTodoForm">
-            <input type="text" id="newTitle" placeholder="任务标题" required>
-            <textarea id="newDescription" placeholder="任务描述 (可选)"></textarea>
-            <button type="submit" id="addButton">添 加</button>
-        </form>
-    </div>
-
+    <!-- --- 任务列表区 --- -->
     <div class="list-section">
-        <h2>任务列表</h2>
+        <div id="loadingIndicator" class="loading-overlay" style="display: none;">
+            <div class="spinner"></div>
+        </div>
         <ul id="todoList">
+            <!-- JS 动态生成任务项 -->
         </ul>
+    </div>
+</div>
+
+<!-- --- 任务添加/编辑弹窗 (Modal) --- -->
+<div id="taskModal" class="modal-overlay"> <!-- 移除 style="display: none;" -->
+    <div class="modal-content">
+        <span class="close-button">&times;</span>
+        <h2 id="modalTitle">新增任务</h2>
+        <form id="taskForm">
+            <input type="hidden" id="modalTodoId">
+
+            <div class="form-group">
+                <label for="modalTitleInput">标题</label>
+                <input type="text" id="modalTitleInput" placeholder="任务标题" required>
+            </div>
+
+            <div class="form-group">
+                <label for="modalDescriptionInput">描述</label>
+                <textarea id="modalDescriptionInput" placeholder="任务描述 (可选)"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="modalPrioritySelect">优先级</label>
+                <select id="modalPrioritySelect">
+                    <option value="HIGH">高 🔥</option>
+                    <option value="MEDIUM" selected>中 🟡</option>
+                    <option value="LOW">低 ❄️</option>
+                </select>
+            </div>
+
+            <button type="submit" id="saveTaskBtn">保 存</button>
+        </form>
     </div>
 </div>
 

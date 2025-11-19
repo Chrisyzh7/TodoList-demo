@@ -1,20 +1,19 @@
 package com.zhyuan.todolist.model;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
-public class TodoCreateRequest {
-
+public class TodoFullUpdateRequest {
     @NotBlank(message = "标题不能为空")
-    @Size(min = 1, max = 255, message = "标题长度必须在1到255个字符之间")
+    @Size(min = 1, max = 255)
     private String title;
 
-    @Size(max = 1000, message = "描述长度不能超过1000个字符")
+    @Size(max = 1000)
     private String description;
 
-    private Priority priority = Priority.MEDIUM;
-
-
+    @NotNull(message = "优先级不能为空")
+    private Priority priority;
 }

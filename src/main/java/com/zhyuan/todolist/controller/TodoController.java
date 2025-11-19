@@ -1,6 +1,7 @@
 package com.zhyuan.todolist.controller;
 
 import com.zhyuan.todolist.model.TodoCreateRequest;
+import com.zhyuan.todolist.model.TodoFullUpdateRequest;
 import com.zhyuan.todolist.model.TodoResponse;
 import com.zhyuan.todolist.model.TodoUpdateRequest;
 import com.zhyuan.todolist.service.TodoService;
@@ -40,27 +41,16 @@ public class TodoController {
      * GET /api/todos
      * @return 所有待办事项的响应DTO列表和HTTP 200 OK状态码
      */
-    @GetMapping // 处理GET请求
+    @GetMapping
     public ResponseEntity<List<TodoResponse>> getAllTodos(
-            @RequestParam(required = false) String search, // search参数是可选的
-            @RequestParam(required = false) Boolean completed // completed参数是可选的
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Boolean completed,
+            @RequestParam(required = false, defaultValue = "updatedAt") String sortBy // 新增排序参数，默认按更新时间
     ) {
-        List<TodoResponse> todos = todoService.getAllTodos(search, completed);
+        List<TodoResponse> todos = todoService.getAllTodos(search, completed, sortBy);
         return ResponseEntity.ok(todos);
     }
 
-    /**
-     * 根据ID获取单个待办事项
-     * GET /api/todos/{id}
-     * @param id 待办事项的唯一标识符
-     * @return 对应的待办事项响应DTO和HTTP 200 OK状态码
-     */
-    @GetMapping("/{id}") // 处理GET请求，并从URL路径中提取ID
-    public ResponseEntity<TodoResponse> getTodoById(@PathVariable Long id) {
-        // @PathVariable 表示从URL路径变量中获取ID
-        TodoResponse todo = todoService.getTodoById(id);
-        return ResponseEntity.ok(todo); // 返回200 OK状态码
-    }
 
     /**
      * 更新待办事项的完成状态
@@ -75,6 +65,21 @@ public class TodoController {
             @Validated @RequestBody TodoUpdateRequest request) {
         TodoResponse updatedTodo = todoService.updateTodoStatus(id, request);
         return ResponseEntity.ok(updatedTodo); // 返回200 OK状态码
+    }
+
+    /**
+     * 完整更新一个待办事项 (标题、描述、优先级)
+     * PUT /api/todos/{id}
+     * @param id 待办事项的唯一标识符
+     * @param request 包含完整更新信息的请求体
+     * @return 更新后的待办事项响应DTO
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<TodoResponse> fullUpdateTodo(
+            @PathVariable Long id,
+            @Validated @RequestBody TodoFullUpdateRequest request) {
+        TodoResponse updatedTodo = todoService.fullUpdateTodo(id, request);
+        return ResponseEntity.ok(updatedTodo);
     }
 
     /**

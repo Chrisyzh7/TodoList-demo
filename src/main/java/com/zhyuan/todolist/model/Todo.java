@@ -35,5 +35,11 @@ public class Todo {
     @Column(nullable = false) // 不可为空
     private LocalDateTime updatedAt; // 更新时间
 
+    @Enumerated(EnumType.STRING) // 将枚举类型映射为数据库中的字符串 ("HIGH", "MEDIUM", "LOW")
+    //这个注解非常重要！它告诉 Hibernate 将枚举值作为字符串存储在数据库中。
+    //默认是 EnumType.ORDINAL，会存储索引 (0, 1, 2)，这种方式非常脆弱，一旦修改枚举顺序，数据库中的旧数据就全错了。
+    @Column(nullable = false)
+    private Priority priority = Priority.LOW; // 默认优先级为中等
+
 
 }

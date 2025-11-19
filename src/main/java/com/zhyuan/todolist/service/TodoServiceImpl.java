@@ -1,12 +1,10 @@
 package com.zhyuan.todolist.service;
 
 import com.zhyuan.todolist.exception.ResourceNotFoundException;
-import com.zhyuan.todolist.model.Todo;
-import com.zhyuan.todolist.model.TodoCreateRequest;
-import com.zhyuan.todolist.model.TodoResponse;
-import com.zhyuan.todolist.model.TodoUpdateRequest;
+import com.zhyuan.todolist.model.*;
 import com.zhyuan.todolist.repository.TodoRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +30,9 @@ public class TodoServiceImpl implements TodoService {
         todo.setDescription(request.getDescription());
         todo.setCompleted(false); // 新建的待办事项默认未完成
         // createdAt和updatedAt由JPA自动处理
+        if (request.getPriority() != null) { // 允许请求中不带priority，使用默认值
+            todo.setPriority(request.getPriority());
+        }
 
         Todo savedTodo = todoRepository.save(todo);     //保存到数据库
         return new TodoResponse(savedTodo);             //返回响应DTO
@@ -43,19 +44,30 @@ public class TodoServiceImpl implements TodoService {
      * @param completed 可选的完成状态过滤
      * @return 待办事项的响应DTO列表
      */
-    public List<TodoResponse> getAllTodos(String search, Boolean completed) {
+    public List<TodoResponse> getAllTodos(String search, Boolean completed, String sortBy) {
         List<Todo> todos;
+        String searchKeyword = (search != null && !search.trim().isEmpty()) ? search : null;
 
-        // 使用新的带排序的查询方法
-        if (search != null && !search.trim().isEmpty()) {
-            todos = todoRepository.searchTodosWithSorting(search, completed);
-        } else if (completed != null) {
-            // 如果只有完成状态过滤，调用带排序的方法
-            todos = todoRepository.findByCompletedOrderByUpdatedAtDescCreatedAtDesc(completed);
+        if ("priority".equalsIgnoreCase(sortBy)) {
+            // 当按优先级排序时，调用新的、专门的方法
+            todos = todoRepository.searchWithPrioritySort(searchKeyword, completed);
         } else {
-            // 没有任何过滤条件，获取所有并排序
-            // todoRepository.findAll(Sort.by(Sort.Direction.DESC, "updatedAt", "createdAt")) 也可以
-            todos = todoRepository.findAllByOrderByUpdatedAtDescCreatedAtDesc();
+            // 对于其他排序方式，保持原有逻辑
+            Sort sort;
+            if ("createdAt".equalsIgnoreCase(sortBy)) {
+                sort = Sort.by(Sort.Direction.DESC, "createdAt");
+            } else {
+                // 默认按 updatedAt 降序
+                sort = Sort.by(Sort.Direction.DESC, "updatedAt");
+            }
+
+            if (searchKeyword != null) {
+                todos = todoRepository.searchTodos(searchKeyword, completed, sort);
+            } else if (completed != null) {
+                todos = todoRepository.findByCompleted(completed, sort);
+            } else {
+                todos = todoRepository.findAll(sort);
+            }
         }
 
         return todos.stream()
@@ -63,17 +75,6 @@ public class TodoServiceImpl implements TodoService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * 根据ID获取单个待办事项
-     * @param id 待办事项的唯一标识符
-     * @return 对应的待办事项响应DTO
-     * @throws ResourceNotFoundException 如果找不到对应ID的待办事项
-     */
-    public TodoResponse getTodoById(Long id) {
-        Todo todo = todoRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Todo not found with id " + id));
-        return new TodoResponse(todo);
-    }
 
     /**
      * 更新待办事项的完成状态
@@ -92,6 +93,26 @@ public class TodoServiceImpl implements TodoService {
 
         Todo updatedTodo = todoRepository.save(todo); // 保存更新
         return new TodoResponse(updatedTodo); // 转换为DTO并返回
+    }
+
+    /**
+     * 完整的编辑操作
+     * @param id
+     * @param request
+     * @return
+     */
+    @Transactional
+    public TodoResponse fullUpdateTodo(Long id, TodoFullUpdateRequest request) {
+        Todo todo = todoRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Todo not found with id " + id));
+
+        todo.setTitle(request.getTitle());
+        todo.setDescription(request.getDescription());
+        todo.setPriority(request.getPriority());
+        // updatedAt 会自动更新
+
+        Todo updatedTodo = todoRepository.save(todo);
+        return new TodoResponse(updatedTodo);
     }
 
     /**
