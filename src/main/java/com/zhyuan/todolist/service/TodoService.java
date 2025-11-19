@@ -9,7 +9,7 @@ import java.util.List;
 public interface TodoService {
     TodoResponse createTodo(TodoCreateRequest request);
 
-    List<TodoResponse> getAllTodos();
+    List<TodoResponse> getAllTodos(String search, Boolean completed);
 
     TodoResponse getTodoById(Long id);
 

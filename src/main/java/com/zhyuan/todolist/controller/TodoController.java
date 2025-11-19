@@ -41,9 +41,12 @@ public class TodoController {
      * @return 所有待办事项的响应DTO列表和HTTP 200 OK状态码
      */
     @GetMapping // 处理GET请求
-    public ResponseEntity<List<TodoResponse>> getAllTodos() {
-        List<TodoResponse> todos = todoService.getAllTodos();
-        return ResponseEntity.ok(todos); // 返回200 OK状态码
+    public ResponseEntity<List<TodoResponse>> getAllTodos(
+            @RequestParam(required = false) String search, // search参数是可选的
+            @RequestParam(required = false) Boolean completed // completed参数是可选的
+    ) {
+        List<TodoResponse> todos = todoService.getAllTodos(search, completed);
+        return ResponseEntity.ok(todos);
     }
 
     /**

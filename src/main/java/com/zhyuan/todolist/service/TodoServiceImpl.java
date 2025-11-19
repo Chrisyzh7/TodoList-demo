@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service // 标记这个类是一个Spring服务组件，Spring会自动管理它的生命周期
 @RequiredArgsConstructor // Lombok: 自动生成一个包含所有final字段的构造函数，用于注入依赖
@@ -37,14 +38,29 @@ public class TodoServiceImpl implements TodoService {
     }
 
     /**
-     * 获取所有待办事项列表
-     * @return 所有待办事项的响应DTO列表
+     * 获取所有待办事项列表，支持搜索和完成状态过滤，并按更新时间降序、创建时间降序排序
+     * @param search 可选的搜索关键字
+     * @param completed 可选的完成状态过滤
+     * @return 待办事项的响应DTO列表
      */
-    public List<TodoResponse> getAllTodos() {
-        List<Todo> todos = todoRepository.findAll();
+    public List<TodoResponse> getAllTodos(String search, Boolean completed) {
+        List<Todo> todos;
+
+        // 使用新的带排序的查询方法
+        if (search != null && !search.trim().isEmpty()) {
+            todos = todoRepository.searchTodosWithSorting(search, completed);
+        } else if (completed != null) {
+            // 如果只有完成状态过滤，调用带排序的方法
+            todos = todoRepository.findByCompletedOrderByUpdatedAtDescCreatedAtDesc(completed);
+        } else {
+            // 没有任何过滤条件，获取所有并排序
+            // todoRepository.findAll(Sort.by(Sort.Direction.DESC, "updatedAt", "createdAt")) 也可以
+            todos = todoRepository.findAllByOrderByUpdatedAtDescCreatedAtDesc();
+        }
+
         return todos.stream()
                 .map(TodoResponse::new)
-                .toList();
+                .collect(Collectors.toList());
     }
 
     /**
